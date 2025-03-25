@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gridworld - Value Iteration</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        .grid-container {
+            display: inline-grid;
+            gap: 2px;
+            margin-top: 20px;
+        }
+
+        .cell {
+            width: 60px;
+            height: 60px;
+            border: 1px solid black;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            position: relative;
+        }
+
+        .start {
+            background-color: green;
+            color: white;
+        }
+
+        .goal {
+            background-color: red;
+            color: white;
+        }
+
+        .obstacle {
+            background-color: gray;
+            color: white;
+        }
+
+        .arrow {
+            position: absolute;
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .value {
+            font-size: 14px;
+            color: black;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Gridworld - Value Iteration</h1>
+    <p>選擇網格大小: <input type="number" id="gridSize" min="5" max="9" value="5"> <button onclick="initGrid()">設置</button>
+    </p>
+    <p>點擊設定起點（綠色）、終點（紅色）、障礙物（灰色）</p>
+    <div class="grid-container" id="grid"></div>
+    <p><button onclick="startValueIteration()">開始 Value Iteration</button></p>
+
+    <script>
+        let gridSize = 5;
+        let start = null;
+        let goal = null;
+        let obstacles = [];
+
+        function initGrid() {
+            gridSize = parseInt($('#gridSize').val());
+            if (gridSize < 5 || gridSize > 9) return alert("請選擇 5 ~ 9 的範圍！");
+
+            $('.grid-container').css({ gridTemplateColumns: `repeat(${gridSize}, 60px)` });
+            let gridHTML = '';
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    gridHTML += `<div class="cell" id="cell-${i}-${j}" onclick="handleClick(${i},${j})"></div>`;
+                }
+            }
+            $('#grid').html(gridHTML);
+            start = null; goal = null; obstacles = [];
+        }
+
+        function handleClick(i, j) {
+            let cell = $(`#cell-${i}-${j}`);
+            if (!start) {
+                start = [i, j];
+                cell.addClass('start').text('S');
+            } else if (!goal) {
+                goal = [i, j];
+                cell.addClass('goal').text('G');
+            } else {
+                let idx = obstacles.findIndex(o => o[0] === i && o[1] === j);
+                if (idx === -1) {
+                    if (obstacles.length < gridSize - 2) {
+                        obstacles.push([i, j]);
+                        cell.addClass('obstacle').text('X');
+                    } else {
+                        alert("已達最大障礙物數量！");
+                    }
+                } else {
+                    obstacles.splice(idx, 1);
+                    cell.removeClass('obstacle').text('');
+                }
+            }
+        }
+
+        function startValueIteration() {
+            if (!start || !goal) {
+                alert("請先選擇起點和終點");
+                return;
+            }
+
+            $.ajax({
+                url: "/run_value_iteration",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ grid_size: gridSize, start: start, goal: goal, obstacles: obstacles }),
+                success: function (response) {
+                    let iterations = response.iterations;
+                    animateIterations(iterations);
+                }
+            });
+        }
+
+        function animateIterations(iterations) {
+            let step = 0;
+            let interval = setInterval(() => {
+                if (step >= iterations.length) {
+                    clearInterval(interval);
+                    return;
+                }
+
+                let policy = iterations[step][1];  // 取得當前策略
+                let values = iterations[step][0];  // 取得當前價值函數
+
+                // 更新畫面上的箭頭與數值
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        let cell = $(`#cell-${i}-${j}`);
+                        if (!cell.hasClass('start') && !cell.hasClass('goal') && !cell.hasClass('obstacle')) {
+                            cell.html(`
+                                <div class="arrow">${policy[i][j]}</div>
+                                <br>
+                                <div class="value">${values[i][j].toFixed(2)}</div>
+                            `);
+                        }
+                    }
+                }
+                step++;
+            }, 1000);
+        }
+
+        $(document).ready(() => initGrid());
+    </script>
+
+</body>
+
+</html>
